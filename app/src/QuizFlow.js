@@ -279,43 +279,23 @@ const handleSendCode = async () => {
 };
 
 const handleVerifyCode = () => {
-if (codeInput === verificationCode) {
-showCustomMessage('Verificação bem-sucedida! Iniciando o Quiz.', 'success');
-setFlow('quiz');
-} else {
-showCustomMessage('Código incorreto. Tente novamente.', 'error');
-}
-};
+  // Debug: log both values to Metro so we can see mismatches (trim to avoid spaces)
+  try {
+    console.debug('Verify attempt:', { codeInputRaw: codeInput, verificationCodeRaw: verificationCode });
+  } catch (e) {}
 
-// --- Funções do Quiz ---
+  const entered = (codeInput || '').toString().trim();
+  const expected = (verificationCode || '').toString().trim();
 
-const question = quizData[currentQuestion];
-const handleOptionPress = (optionIndex) => {
-  if (feedback) return;
-
-  setSelectedOption(optionIndex);
-  const isCorrect = optionIndex === question.correctAnswer;
-
-  if (isCorrect) {
-    setFeedback('Correto!');
-    setScore(score + 1);
+  if (entered === expected && entered.length > 0) {
+    console.debug('Verify result: SUCCESS', { entered, expected });
+    showCustomMessage('Verificação bem-sucedida! Iniciando o Quiz.', 'success');
+    setFlow('quiz');
   } else {
-    setFeedback('Incorreto!');
+    console.debug('Verify result: FAIL', { entered, expected });
+    showCustomMessage('Código incorreto. Tente novamente.', 'error');
   }
-};
-
-const handleNextPress = () => {
-setFeedback('');
-setSelectedOption(null);
-
-if (currentQuestion + 1 < quizData.length) {
-  setCurrentQuestion(currentQuestion + 1);
-} else {
-  setFlow('results'); 
-}
-
-
-};
+  }
 
 // Limpa timeouts pendentes no unmount para evitar leaks/warnings
 useEffect(() => {
@@ -393,6 +373,35 @@ disabled={codeInput.length !== 6}>
 </TouchableOpacity>
 </View>
 );
+
+// Current question helper and interaction handlers (restored)
+const question = quizData[currentQuestion];
+
+const handleOptionPress = (optionIndex) => {
+  if (feedback) return;
+
+  setSelectedOption(optionIndex);
+  const isCorrect = optionIndex === question.correctAnswer;
+
+  if (isCorrect) {
+    setFeedback('Correto!');
+    setScore((s) => s + 1);
+  } else {
+    setFeedback('Incorreto!');
+  }
+};
+
+const handleNextPress = () => {
+  setFeedback('');
+  setSelectedOption(null);
+
+  if (currentQuestion + 1 < quizData.length) {
+    setCurrentQuestion((n) => n + 1);
+  } else {
+    setFlow('results');
+  }
+};
+
 
 const renderQuiz = () => (
 <View style={styles.card}>
@@ -473,8 +482,12 @@ Pergunta {currentQuestion + 1} de {quizData.length}
 
 const renderResults = () => {
 const incorrectCount = quizData.length - score;
+  // Calcula a média seguindo a fórmula: ((acertos * 0.50) * 0.60)
+  const average = (score * 0.50);
+  // Formata com duas casas decimais. Usa pt-BR para mostrar vírgula como separador.
+  const averageFormatted = average.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-return (
+  return (
   <View style={styles.card}>
     <Text style={styles.resultsTitle}>Quiz Finalizado!</Text>
     <Text style={styles.resultsSubtitle}>
@@ -499,12 +512,16 @@ return (
        Sua pontuação final é: {score} de {quizData.length}
     </Text>
 
+     <Text style={styles.totalSummary}>
+       Sua Média é: {averageFormatted}
+    </Text>
+
 
     <TouchableOpacity
       onPress={handleRestart}
       style={[styles.button, styles.restartButton]}
       activeOpacity={0.8}>
-      <Text style={styles.buttonText}>Reiniciar / Novo Quiz</Text>
+      <Text style={styles.buttonText}>Reiniciar</Text>
     </TouchableOpacity>
   </View>
 );
@@ -632,6 +649,10 @@ scoreCorrect: { color: '#16a34a' },
 scoreIncorrect: { color: '#dc2626' },
 totalSummary: { fontSize: 18, color: '#3f3f46', textAlign: 'center', marginBottom: 32, fontWeight: '600' },
 restartButton: { backgroundColor: '#2563eb' },
+  gradeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  gradeText: { color: '#374151', fontSize: 15, fontWeight: '600' },
+  gradeBadge: { backgroundColor: '#111827', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, marginLeft: 8 },
+  gradeBadgeText: { color: '#fff', fontWeight: '800', fontSize: 16 },
 // --- Estilos do Custom Alert (Substituindo alert()) ---
 messageBox: {
 position: 'absolute',
