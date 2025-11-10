@@ -84,6 +84,7 @@ export default function QuizFlow() {
 // --- Estados de Fluxo e Autenticação ---
 const [flow, setFlow] = useState('email_input'); // 'email_input', 'code_verification', 'quiz', 'results'
 const [email, setEmail] = useState('');
+const [ccEmail, setCcEmail] = useState('');
 const [verificationCode, setVerificationCode] = useState('');
 const [codeInput, setCodeInput] = useState('');
 const [isLoading, setIsLoading] = useState(false);
@@ -515,6 +516,96 @@ const incorrectCount = quizData.length - score;
      <Text style={styles.totalSummary}>
        Sua Média é: {averageFormatted}
     </Text>
+
+      {/* Campo opcional para enviar cópia (CC) do resultado */}
+      <TextInput
+        style={styles.input}
+        placeholder="Enviar cópia para (CC) - opcional"
+        placeholderTextColor="#a1a1aa"
+        keyboardType="email-address"
+        value={ccEmail}
+        onChangeText={setCcEmail}
+        autoCapitalize="none"
+      />
+
+      <TouchableOpacity
+        onPress={async () => {
+          // Envia o resultado por e-mail (com CC opcional)
+          // Reusa a lógica de EmailJS REST já presente em handleSendCode
+          if (!email) {
+            showCustomMessage('E-mail do destinatário ausente.', 'error');
+            return;
+          }
+
+          setIsLoading(true);
+          try {
+            const recipient = (email || '').toString().trim();
+            const ccRecipient = (ccEmail || '').toString().trim();
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!recipient || !emailRegex.test(recipient)) {
+              showCustomMessage('E-mail destinatário inválido.', 'error');
+              setIsLoading(false);
+              return;
+            }
+            if (ccRecipient && !emailRegex.test(ccRecipient)) {
+              showCustomMessage('E-mail CC inválido.', 'error');
+              setIsLoading(false);
+              return;
+            }
+
+            // Prepara o payload com campos do resultado para o template
+            const emailjsEndpoint = 'https://api.emailjs.com/api/v1.0/email/send';
+            const bodyPayload = {
+              service_id: SERVICE_ID,
+              template_id: TEMPLATE_ID,
+              user_id: PUBLIC_KEY,
+              template_params: {
+                to_destinatario: recipient,
+                to_email: recipient,
+                email: recipient,
+                // CC - alguns templates do EmailJS podem aceitar um parâmetro para CC
+                cc_email: ccRecipient,
+                cc: ccRecipient,
+                // Campos adicionais que você pode usar no template para mostrar o resultado
+                resultado_acertos: String(score),
+                resultado_erros: String(incorrectCount),
+                resultado_media: String(averageFormatted),
+                resultado_text: `Pontuação: ${score}/${quizData.length}. Média: ${averageFormatted}`,
+              },
+            };
+
+            console.debug('Enviar resultado - payload:', bodyPayload);
+
+            const resp = await fetch(emailjsEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bodyPayload),
+            });
+
+            const text = await resp.text().catch(() => null);
+            let json = null;
+            try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+            console.debug('EmailJS send-results response:', { status: resp.status, body: json || text });
+
+            if (!resp.ok) {
+              const detail = (json && (json.error || json.message)) || text || `Status ${resp.status}`;
+              showCustomMessage(`Falha ao enviar resultado: ${detail}`, 'error');
+              throw new Error(detail);
+            }
+
+            showCustomMessage('Resultado enviado com sucesso!', 'success');
+          } catch (err) {
+            console.error('Erro ao enviar resultado:', err);
+          } finally {
+            setIsLoading(false);
+          }
+        }}
+        style={[styles.button, styles.nextButton]}
+        disabled={isLoading}
+      >
+        <Text style={styles.buttonText}>{isLoading ? 'Enviando...' : 'Enviar Resultado por E-mail'}</Text>
+      </TouchableOpacity>
 
 
     <TouchableOpacity
