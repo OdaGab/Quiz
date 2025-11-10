@@ -71,6 +71,59 @@ app.post('/send-code', async (req, res) => {
   return res.json({ success: true, message: 'Código enviado (simulado).', code });
 });
 
+// Endpoint para enviar o resultado do quiz com suporte a CC
+app.post('/send-results', async (req, res) => {
+  const { email, ccEmail, score, incorrectCount, average, resultado_text } = req.body || {};
+  const emailRegex = /\S+@\S+\.\S+/;
+
+  if (!email || !emailRegex.test(email)) {
+    return res.status(400).json({ success: false, message: 'E-mail destinatário inválido.' });
+  }
+
+  // Monta o conteúdo do e-mail
+  const subject = 'Resultado do Quiz';
+  const text = resultado_text || `Pontuação: ${score}/${quizDataLength || 'N/A'}. Média: ${average}`;
+  const html = `<p>${text.replace(/\n/g, '<br/>')}</p>
+    <ul>
+      <li>Acertos: ${score}</li>
+      <li>Erros: ${incorrectCount}</li>
+      <li>Média: ${average}</li>
+    </ul>`;
+
+  // If SendGrid is configured, use it and include CC if provided
+  if (sgMail) {
+    const msg = {
+      to: email,
+      from: FROM_EMAIL,
+      subject,
+      text,
+      html,
+    };
+
+    if (ccEmail && emailRegex.test(ccEmail)) {
+      msg.cc = ccEmail;
+    }
+
+    try {
+      await sgMail.send(msg);
+      console.log(`Resultado enviado via SendGrid para ${email} ${ccEmail ? ` (cc: ${ccEmail})` : ''}`);
+      return res.json({ success: true, message: 'Resultado enviado via SendGrid.' });
+    } catch (err) {
+      console.error('Erro ao enviar resultado via SendGrid:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        const details = { message: err && err.message ? err.message : String(err) };
+        if (err && err.response && err.response.body) details.response = err.response.body;
+        return res.status(500).json({ success: false, message: 'Erro ao enviar resultado via SendGrid.', error: details });
+      }
+      return res.status(500).json({ success: false, message: 'Erro ao enviar resultado via SendGrid.' });
+    }
+  }
+
+  // Fallback: se não há SendGrid, apenas simula o envio (útil em desenvolvimento)
+  console.log(`(Simulação) Enviando resultado para ${email}${ccEmail ? ` (cc: ${ccEmail})` : ''}: ${text}`);
+  return res.json({ success: true, message: 'Resultado enviado (simulado).', data: { email, ccEmail, score, incorrectCount, average } });
+});
+
 app.listen(port, () => {
   console.log(`Quiz backend rodando em http://localhost:${port}`);
 });
